@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    meta.helm.sh/release-name: test-app
+  labels:
+    app: test-app
+    app-kubernetes-io/instance: test-app
+    app-kubernetes-io/name: test-app
+    app-kubernetes-io/version: 0-0-1
+    app.kubernetes.io/managed-by: Helm
+    helm-sh/chart: test-app-0-1-0
+  name: test-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app-kubernetes-io/instance: test-app
+      app-kubernetes-io/name: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+        app-kubernetes-io/instance: test-app
+        app-kubernetes-io/name: test-app
+    spec:
+      shareProcessNamespace: true
+      containers:
+      - image: coolamiy/sidecar-dotnet
+        imagePullPolicy: IfNotPresent
+        name: toolbox
+        stdin: true
+        tty: true
+        securityContext:
+          capabilities:
+              add:
+              - SYS_PTRACE
+        volumeMounts:
+            - name: shared-volume-tmp
+              mountPath: /tmp
+            - name: data-dir
+              mountPath: /data
+        resources:
+          limits:
+            cpu: 100m
+            memory: 100Mi
+          requests:
+            cpu: 100m
+            memory: 100Mi
+      - env:
+        - name: ASPNETCORE_URLS
+          value: http://0.0.0.0:8080
+        image: mcr.microsoft.com/dotnet/samples:aspnetapp
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 6
+          httpGet:
+            path: /
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 20
+          periodSeconds: 60
+          successThreshold: 1
+          timeoutSeconds: 30
+        name: test-app
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 10
+          httpGet:
+            path: /
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          successThreshold: 2
+          timeoutSeconds: 30
+        resources:
+          limits:
+            cpu: 500m
+            memory: 700Mi
+          requests:
+            cpu: 200m
+            memory: 400Mi
+        volumeMounts:
+        - mountPath: /etc/m/m.overrides.json
+          name: test-app-config-volume
+          subPath: test-app.overrides.json
+        - name: shared-volume-tmp
+          mountPath: /tmp
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: default
+      serviceAccountName: default
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: shared-volume-tmp
+        emptyDir: {}
+      - name: data-dir 
+        persistentVolumeClaim:
+            claimName: dump-data
